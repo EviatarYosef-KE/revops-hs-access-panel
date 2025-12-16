@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RevOps HubSpot Access Panel</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>RevOps HubSpot Access Panel</h1>
+
+    <div class="card">
+      <h2>Admin Unlock</h2>
+      <div class="row">
+        <input id="adminCode" type="password" placeholder="Enter admin code" />
+        <button id="unlockBtn">Unlock</button>
+      </div>
+      <p class="muted">Admin code is validated server-side (Apps Script). Stored only in this browser session.</p>
+    </div>
+
+    <div class="card">
+      <h2>Configuration</h2>
+      <div class="row">
+        <input id="gatewayUrl" type="text" placeholder="Paste Apps Script Web App URL here" />
+        <button id="saveCfgBtn">Save</button>
+      </div>
+      <p class="muted">Tip: save once and it will persist in your browser.</p>
+    </div>
+
+    <div id="panel" class="card hidden">
+      <h2>Grant / Revoke Access</h2>
+
+      <div class="grid">
+        <div>
+          <label>User email</label>
+          <input id="userEmail" type="email" placeholder="user@company.com" />
+        </div>
+
+        <div>
+          <label>Team</label>
+          <select id="teamSelect"></select>
+        </div>
+
+        <div>
+          <label>Duration</label>
+          <select id="duration">
+            <option value="permanent">Permanent</option>
+            <option value="24">24 hours</option>
+            <option value="72">72 hours</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="refreshTeamsBtn">Refresh Teams</button>
+        <button id="grantBtn" class="primary">Grant</button>
+        <button id="revokeBtn" class="danger">Revoke</button>
+      </div>
+
+      <div class="row">
+        <button id="listPassesBtn">List Passes</button>
+        <button id="revokeExpiredBtn">Revoke Expired Now</button>
+      </div>
+
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
