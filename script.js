@@ -41,21 +41,25 @@ function loadSaved() {
 }
 
 async function apiCall(action, payload = {}) {
-  const url = getGatewayUrl();
-  if (!url) throw new Error("Please save Apps Script Web App URL first.");
+  const gasUrl = getGatewayUrl();
+  if (!gasUrl) throw new Error("Please save Apps Script Web App URL first.");
 
-  const body = { action, ...payload };
-  if (adminCode) body.adminCode = adminCode;
+  const bodyPayload = { action, ...payload };
+  if (adminCode) bodyPayload.adminCode = adminCode;
 
-  const res = await fetch(url, {
+  const res = await fetch("/api/gateway", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      gasUrl,
+      payload: bodyPayload,
+    }),
   });
 
   const json = await res.json();
   return json;
 }
+
 
 async function refreshTeams() {
   setOutput("Loading teams...");
