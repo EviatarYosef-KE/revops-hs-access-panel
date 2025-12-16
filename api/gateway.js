@@ -8,9 +8,6 @@ export default async function handler(req, res) {
     if (!gasUrl) return res.status(400).json({ ok: false, error: "Missing gasUrl" });
     if (!payload) return res.status(400).json({ ok: false, error: "Missing payload" });
 
-    // Allow both:
-    // https://script.google.com/macros/s/.../exec
-    // https://script.google.com/a/macros/<domain>/s/.../exec
     const u = String(gasUrl || "").trim();
     const isAppsScript =
       u.startsWith("https://script.google.com/") &&
@@ -18,18 +15,31 @@ export default async function handler(req, res) {
       (u.endsWith("/exec") || u.includes("/exec?"));
 
     if (!isAppsScript) {
-      return res.status(400).json({ ok: false, error: "Invalid gasUrl" });
+      return res.status(400).json({ ok: false, error: "Invalid gasUrl (must be a Web App /exec URL)" });
     }
 
     const resp = await fetch(u, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      redirect: "follow",
     });
 
+    const contentType = resp.headers.get("content-type") || "";
     const text = await resp.text();
 
-    // Forward status + body back to browser
+    // If Apps Script returned HTML (login, redirect, error page), wrap it as JSON
+    if (!contentType.includes("application/json")) {
+      return res.status(200).json({
+        ok: false,
+        error: "Apps Script did not return JSON. Most likely wrong URL (not /exec) or access/auth page.",
+        status: resp.status,
+        contentType,
+        preview: text.slice(0, 400),
+      });
+    }
+
+    // Otherwise forward JSON text
     res.status(resp.status);
     res.setHeader("Content-Type", "application/json");
     return res.send(text);
