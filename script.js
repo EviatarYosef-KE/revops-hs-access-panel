@@ -409,35 +409,41 @@ async function grantSecondary() {
 
   setOutput("Granting secondary access...");
   
-  const payload = { email, teamId };
-  if (roleId) payload.defaultRoleId = roleId;
-  
-  const res = await apiCall("grantAccess", payload);
-  
-  // Show verification results
-  if (res.ok && res.result && res.result.verification) {
-    const v = res.result.verification;
-    let verifyHtml = '<div class="alert alert-success"><strong>✅ Access granted</strong></div>';
+  try {
+    const payload = { email, teamId };
+    if (roleId) payload.defaultRoleId = roleId;
     
-    verifyHtml += '<div class="verification-box">';
-    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment may have failed)'}</p>`;
-    verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
-    verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
-    verifyHtml += '</div>';
+    const res = await apiCall("grantAccess", payload);
     
-    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-      verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Warning:</strong> Role was not assigned by HubSpot. You may need to assign the role manually in HubSpot UI, or the role ID might be invalid.</div>';
+    // Show verification results
+    if (res.ok && res.result && res.result.verification) {
+      const v = res.result.verification;
+      let verifyHtml = '<div class="alert alert-success"><strong>✅ Team access granted</strong></div>';
+      
+      verifyHtml += '<div class="verification-box">';
+      verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment failed)'}</p>`;
+      verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
+      verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
+      verifyHtml += '</div>';
+      
+      if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+        verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Failed</strong><br>';
+        verifyHtml += 'Team assignment worked, but HubSpot rejected the role assignment.<br>';
+        verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+      }
+      
+      setOutput(res, verifyHtml);
+      
+      // Only refresh if operation was successful
+      if (res.ok) {
+        setTimeout(() => inspectUser(), 1000);
+      }
+    } else {
+      setOutput(res);
     }
-    
-    setOutput(res, verifyHtml);
-  } else {
-    setOutput(res);
-  }
-
-  if (res.ok) {
-    // Refresh user info
-    setTimeout(() => inspectUser(), 1000);
+  } catch (e) {
+    setOutput({ ok: false, error: String(e?.message || e) });
   }
 }
 
@@ -451,35 +457,41 @@ async function grantPrimary() {
 
   setOutput("Granting PRIMARY access...");
   
-  const payload = { email, teamId, mode: "primary" };
-  if (roleId) payload.defaultRoleId = roleId;
-  
-  const res = await apiCall("grantAccess", payload);
-  
-  // Show verification results
-  if (res.ok && res.result && res.result.verification) {
-    const v = res.result.verification;
-    let verifyHtml = '<div class="alert alert-success"><strong>✅ Primary access granted</strong></div>';
+  try {
+    const payload = { email, teamId, mode: "primary" };
+    if (roleId) payload.defaultRoleId = roleId;
     
-    verifyHtml += '<div class="verification-box">';
-    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment may have failed)'}</p>`;
-    verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
-    verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
-    verifyHtml += '</div>';
+    const res = await apiCall("grantAccess", payload);
     
-    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-      verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Warning:</strong> Role was not assigned by HubSpot. You may need to assign the role manually in HubSpot UI, or try using the "Assign Role Only" button.</div>';
+    // Show verification results
+    if (res.ok && res.result && res.result.verification) {
+      const v = res.result.verification;
+      let verifyHtml = '<div class="alert alert-success"><strong>✅ Primary team access granted</strong></div>';
+      
+      verifyHtml += '<div class="verification-box">';
+      verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment failed)'}</p>`;
+      verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
+      verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
+      verifyHtml += '</div>';
+      
+      if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+        verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Failed</strong><br>';
+        verifyHtml += 'Team assignment worked, but HubSpot rejected the role assignment.<br>';
+        verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+      }
+      
+      setOutput(res, verifyHtml);
+      
+      // Only refresh if operation was successful
+      if (res.ok) {
+        setTimeout(() => inspectUser(), 1000);
+      }
+    } else {
+      setOutput(res);
     }
-    
-    setOutput(res, verifyHtml);
-  } else {
-    setOutput(res);
-  }
-
-  if (res.ok) {
-    // Refresh user info
-    setTimeout(() => inspectUser(), 1000);
+  } catch (e) {
+    setOutput({ ok: false, error: String(e?.message || e) });
   }
 }
 
@@ -490,32 +502,48 @@ async function assignRoleOnly() {
   if (!email) return alert("Enter a user email.");
   if (!roleId) return alert("Select a role.");
 
-  setOutput("Assigning role...");
+  setOutput("Attempting to assign role...");
   
-  const res = await apiCall("assignRole", { email, roleId });
-  
-  // Show verification results
-  if (res.ok && res.result && res.result.verification) {
-    const v = res.result.verification;
-    let verifyHtml = '<div class="alert alert-success"><strong>✅ Role assignment attempted</strong></div>';
+  try {
+    const res = await apiCall("assignRole", { email, roleId });
     
-    verifyHtml += '<div class="verification-box">';
-    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '⚠️ None (assignment failed)'}</p>`;
-    verifyHtml += '</div>';
-    
-    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-      verifyHtml += '<div class="alert alert-error"><strong>❌ Error:</strong> HubSpot did not assign the role. This might mean:<br>1. The role ID is invalid<br>2. The role requires Super Admin permissions<br>3. Your API token lacks necessary scopes<br>4. HubSpot API limitations</div>';
+    // Show verification results
+    if (res.ok && res.result && res.result.verification) {
+      const v = res.result.verification;
+      let verifyHtml = '';
+      
+      if (v.actualRoleIds && v.actualRoleIds.length > 0) {
+        verifyHtml = '<div class="alert alert-success"><strong>✅ Role assigned successfully!</strong></div>';
+      } else {
+        verifyHtml = '<div class="alert alert-error"><strong>❌ Role assignment FAILED</strong></div>';
+      }
+      
+      verifyHtml += '<div class="verification-box">';
+      verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '❌ None'}</p>`;
+      verifyHtml += '</div>';
+      
+      if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+        verifyHtml += '<div class="alert alert-error"><strong>❌ HubSpot Rejected Role Assignment</strong><br><br>';
+        verifyHtml += '<strong>Possible reasons:</strong><br>';
+        verifyHtml += '• API token lacks <code>settings.users.roles.write</code> scope<br>';
+        verifyHtml += '• Role requires Super Admin permissions<br>';
+        verifyHtml += '• HubSpot API doesn\'t support role assignment via this endpoint<br>';
+        verifyHtml += '• Role ID is invalid<br><br>';
+        verifyHtml += '<strong>Solution:</strong> Assign roles manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+      }
+      
+      setOutput(res, verifyHtml);
+      
+      // Only refresh on success
+      if (res.ok && v.actualRoleIds && v.actualRoleIds.length > 0) {
+        setTimeout(() => inspectUser(), 1000);
+      }
+    } else {
+      setOutput(res);
     }
-    
-    setOutput(res, verifyHtml);
-  } else {
-    setOutput(res);
-  }
-
-  if (res.ok) {
-    // Refresh user info
-    setTimeout(() => inspectUser(), 1000);
+  } catch (e) {
+    setOutput({ ok: false, error: String(e?.message || e) });
   }
 }
 
@@ -529,12 +557,20 @@ async function revokeAccess() {
   if (!confirm(`Revoke access for ${email} from the selected team?`)) return;
 
   setOutput("Revoking access...");
-  const res = await apiCall("revokeAccess", { email, teamId });
-  setOutput(res);
-
-  if (res.ok) {
-    // Refresh user info
-    setTimeout(() => inspectUser(), 500);
+  
+  try {
+    const res = await apiCall("revokeAccess", { email, teamId });
+    
+    if (res.ok) {
+      setOutput(res, '<div class="alert alert-success"><strong>✅ Access revoked successfully</strong></div>');
+      // Only refresh on success
+      setTimeout(() => inspectUser(), 1000);
+    } else {
+      // Show error without refreshing - this prevents jumping to inspection
+      setOutput(res);
+    }
+  } catch (e) {
+    setOutput({ ok: false, error: String(e?.message || e) });
   }
 }
 
