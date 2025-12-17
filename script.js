@@ -620,7 +620,7 @@ async function revokeAccess() {
 
   if (!confirm(`Revoke access for ${email} from the selected team?`)) return;
 
-  setOutput("Attempting to revoke access using multiple methods...");
+  setOutput("Revoking access (2-step process: remove team, restore role)...");
   
   try {
     const res = await apiCall("revokeAccess", { email, teamId });
@@ -630,97 +630,71 @@ async function revokeAccess() {
       
       // Check if it was actually ok
       if (result.ok === false) {
-        setOutput(res, `<div class="alert alert-warning"><strong>⚠️ ${escapeHtml(result.note || 'Revoke not performed')}</strong></div>`);
+        let errorHtml = `<div class="alert alert-error"><strong>❌ ${escapeHtml(result.message || result.note || 'Revoke failed')}</strong></div>`;
+        
+        if (result.recommendation) {
+          errorHtml += `<div class="alert alert-warning" style="margin-top: 12px;"><strong>What to do:</strong><br>${escapeHtml(result.recommendation)}</div>`;
+        }
+        
+        setOutput(res, errorHtml);
         return;
       }
       
       let verifyHtml = '';
       
-      if (result.ok && result.method) {
-        verifyHtml = `<div class="alert alert-success"><strong>✅ Access revoked successfully!</strong><br>Method that worked: <strong>${escapeHtml(result.method)}</strong></div>`;
-      } else {
-        verifyHtml = '<div class="alert alert-error"><strong>❌ All revoke methods failed</strong></div>';
-      }
-      
-      // Show before/after comparison
-      if (result.beforeState && result.verification) {
-        const before = result.beforeState;
-        const after = result.verification;
+      // Success!
+      if (result.ok) {
+        verifyHtml = `<div class="alert alert-success"><strong>✅ ${escapeHtml(result.message || 'Access revoked')}</strong></div>`;
         
-        verifyHtml += '<div class="verification-box">';
-        verifyHtml += '<h4>Before → After:</h4>';
-        verifyHtml += `<p><strong>Roles:</strong> `;
-        if (before.roleIds && before.roleIds.length > 0) {
-          verifyHtml += `${before.roleIds.join(', ')} → `;
-        } else {
-          verifyHtml += 'None → ';
-        }
-        if (after.actualRoleIds && after.actualRoleIds.length > 0) {
-          verifyHtml += `✅ ${after.actualRoleIds.join(', ')} (preserved)`;
-        } else {
-          verifyHtml += '❌ None (LOST!)';
-        }
-        verifyHtml += '</p>';
-        
-        verifyHtml += `<p><strong>Secondary Teams:</strong> `;
-        if (before.secondaryTeamIds && before.secondaryTeamIds.length > 0) {
-          verifyHtml += `${before.secondaryTeamIds.join(', ')} → `;
-        } else {
-          verifyHtml += 'None → ';
-        }
-        if (after.actualSecondaryTeamIds && after.actualSecondaryTeamIds.length > 0) {
-          verifyHtml += `${after.actualSecondaryTeamIds.join(', ')}`;
-        } else {
-          verifyHtml += 'None (removed)';
-        }
-        verifyHtml += '</p>';
-        verifyHtml += '</div>';
-        
-        // Check if roles were lost
-        const hadRoles = before.roleIds && before.roleIds.length > 0;
-        const hasRoles = after.actualRoleIds && after.actualRoleIds.length > 0;
-        
-        if (hadRoles && !hasRoles) {
-          verifyHtml += '<div class="alert alert-error"><strong>❌ CRITICAL: Roles were removed!</strong><br>';
-          verifyHtml += 'This is a HubSpot API bug. The team removal somehow cleared the roles.<br>';
-          verifyHtml += '<strong>Action needed:</strong> Re-assign the role using "Assign Role Only" button.</div>';
-        }
-        
-        // Check if team was actually removed
-        const hadTeam = before.secondaryTeamIds && before.secondaryTeamIds.includes(teamId);
-        const hasTeam = after.actualSecondaryTeamIds && after.actualSecondaryTeamIds.includes(teamId);
-        
-        if (hadTeam && hasTeam) {
-          verifyHtml += '<div class="alert alert-error"><strong>❌ Team was NOT removed!</strong><br>';
-          verifyHtml += 'The API call was sent but HubSpot did not remove the team.<br>';
-          verifyHtml += 'You may need to remove it manually in HubSpot UI.</div>';
-        }
-      }
-      
-      // Show attempted methods
-      if (result.attempts && result.attempts.length > 0) {
-        verifyHtml += '<details style="margin-top: 16px;"><summary style="cursor: pointer; font-weight: 600;">Show attempted methods (' + result.attempts.length + ')</summary>';
-        verifyHtml += '<div style="margin-top: 12px; font-family: monospace; font-size: 12px;">';
-        for (const attempt of result.attempts) {
-          verifyHtml += `<div style="padding: 8px; background: rgba(255,255,255,0.02); margin: 4px 0; border-radius: 4px;">`;
-          verifyHtml += `<strong>${escapeHtml(attempt.method)}:</strong> `;
-          if (attempt.error) {
-            verifyHtml += `<span style="color: #ef4444;">${escapeHtml(attempt.error)}</span>`;
-          } else if (attempt.verification) {
-            const v = attempt.verification;
-            const teamRemoved = !v.actualSecondaryTeamIds || !v.actualSecondaryTeamIds.includes(teamId);
-            const rolesPreserved = v.actualRoleIds && v.actualRoleIds.length > 0;
-            if (teamRemoved && rolesPreserved) {
-              verifyHtml += '<span style="color: #10b981;">✅ Worked!</span>';
-            } else {
-              verifyHtml += `<span style="color: #f59e0b;">⚠️ Team removed: ${teamRemoved}, Roles preserved: ${rolesPreserved}</span>`;
-            }
-          } else {
-            verifyHtml += '<span style="color: #6b7280;">Sent</span>';
+        // Show step-by-step what happened
+        if (result.steps) {
+          verifyHtml += '<div class="verification-box">';
+          verifyHtml += '<h4>Two-Step Process Results:</h4>';
+          
+          // Step 1: Team Removal
+          if (result.steps.step1_teamRemoval) {
+            const step1 = result.steps.step1_teamRemoval;
+            verifyHtml += `<p><strong>Step 1 - Remove Team:</strong> ${step1.success ? '✅ Success' : '❌ Failed'}</p>`;
           }
-          verifyHtml += `</div>`;
+          
+          // Step 2: Role Restore
+          if (result.steps.step2_roleRestore) {
+            const step2 = result.steps.step2_roleRestore;
+            if (step2.attempted) {
+              if (step2.success) {
+                verifyHtml += `<p><strong>Step 2 - Restore Role:</strong> ✅ Role restored successfully!</p>`;
+                if (step2.result && step2.result.method) {
+                  verifyHtml += `<p style="margin-left: 20px; font-size: 13px; color: #94a3b8;">Method: ${escapeHtml(step2.result.method)}</p>`;
+                }
+              } else {
+                verifyHtml += `<p><strong>Step 2 - Restore Role:</strong> ⚠️ Role restoration attempted but may have failed</p>`;
+              }
+            } else {
+              verifyHtml += `<p><strong>Step 2 - Restore Role:</strong> Not needed (role was preserved)</p>`;
+            }
+          }
+          
+          verifyHtml += '</div>';
         }
-        verifyHtml += '</div></details>';
+        
+        // Show final state
+        if (result.finalVerification) {
+          const v = result.finalVerification;
+          verifyHtml += '<div class="verification-box">';
+          verifyHtml += '<h4>Final Result:</h4>';
+          verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '⚠️ None'}</p>`;
+          verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId ? '✅ ' + v.actualPrimaryTeamId : 'None'}</p>`;
+          verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
+          verifyHtml += '</div>';
+        }
+        
+        // Check if manual role restoration needed
+        if (result.needsManualRoleRestore) {
+          verifyHtml += '<div class="alert alert-warning" style="margin-top: 16px;"><strong>⚠️ Action Required</strong><br>';
+          verifyHtml += 'The team was removed but the role was lost in the process.<br>';
+          verifyHtml += 'Automatic role restoration failed.<br><br>';
+          verifyHtml += '<strong>Next step:</strong> Click "Assign Role Only" button to restore the role.</div>';
+        }
       }
       
       setOutput(res, verifyHtml);
