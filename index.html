@@ -8,69 +8,176 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>RevOps HubSpot Access Panel</h1>
+    <header class="page-header">
+      <h1>🚀 RevOps HubSpot Access Panel</h1>
+      <p class="tagline">Manage team access without touching HubSpot UI</p>
+    </header>
 
+    <!-- Admin Unlock -->
     <div class="card">
-      <h2>Admin Unlock</h2>
-      <div class="row">
-        <input id="adminCode" type="password" placeholder="Enter admin code" />
-        <button id="unlockBtn">Unlock</button>
+      <div class="card-header">
+        <h2>🔐 Admin Authentication</h2>
       </div>
-      <p class="muted">Admin code is validated server-side (Apps Script). Stored only in this browser session.</p>
+      <div class="card-body">
+        <div class="form-row">
+          <input id="adminCode" type="password" placeholder="Enter admin code" />
+          <button id="unlockBtn" class="btn-primary">Unlock Panel</button>
+        </div>
+        <p class="help-text">Admin code is validated server-side. Stored only in this browser session.</p>
+      </div>
     </div>
 
+    <!-- Configuration -->
     <div class="card">
-      <h2>Configuration</h2>
-      <div class="row">
-        <input id="gatewayUrl" type="text" placeholder="Paste Apps Script Web App URL here" />
-        <button id="saveCfgBtn">Save</button>
+      <div class="card-header">
+        <h2>⚙️ Configuration</h2>
       </div>
-      <p class="muted">Tip: save once and it will persist in your browser.</p>
+      <div class="card-body">
+        <div class="form-row">
+          <input id="gatewayUrl" type="text" placeholder="Apps Script Web App URL (/exec)" />
+          <button id="saveCfgBtn" class="btn-secondary">Save URL</button>
+        </div>
+        <p class="help-text">Save once and it persists in your browser.</p>
+      </div>
     </div>
 
-    <div id="panel" class="card hidden">
-      <h2>Grant / Revoke Access</h2>
-
-      <div class="grid">
-        <div>
-          <label>User email</label>
-          <input id="userEmail" type="email" placeholder="user@company.com" />
+    <!-- Main Panel (hidden until unlocked) -->
+    <div id="panel" class="hidden">
+      
+      <!-- Step 1: Load Resources -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📦 Step 1: Load Resources</h2>
         </div>
-
-        <div>
-          <label>Team</label>
-          <select id="teamSelect"></select>
-        </div>
-
-        <div>
-          <label>Default Role ID (optional)</label>
-          <input id="roleIdInput" type="text" placeholder="e.g., 12345" />
-          <p class="muted" style="margin-top: 4px; font-size: 11px;">Use "List Roles" to find IDs. Only needed if user has no roles.</p>
-        </div>
-
-        <div>
-          <label>Duration</label>
-          <select id="duration">
-            <option value="permanent">Permanent</option>
-            <option value="24">24 hours</option>
-            <option value="72">72 hours</option>
-          </select>
+        <div class="card-body">
+          <div class="button-group">
+            <button id="refreshTeamsBtn" class="btn-action">
+              <span class="icon">👥</span>
+              Load Teams
+            </button>
+            <button id="listRolesBtn" class="btn-action">
+              <span class="icon">🎭</span>
+              Load Roles
+            </button>
+          </div>
+          <div id="resourceStatus" class="status-box hidden"></div>
         </div>
       </div>
 
-      <div class="row">
-        <button id="refreshTeamsBtn">Refresh Teams</button>
-        <button id="listRolesBtn" style="background: #1a4d8f; border-color: #1a4d8f;">List Roles</button>
-        <button id="grantBtn" class="primary">Grant</button>
-        <button id="revokeBtn" class="danger">Revoke</button>
+      <!-- Step 2: User Lookup -->
+      <div class="card">
+        <div class="card-header">
+          <h2>👤 Step 2: Find User</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="userEmail">User Email</label>
+            <input id="userEmail" type="email" placeholder="user@company.com" />
+          </div>
+          
+          <div class="button-group">
+            <button id="inspectBtn" class="btn-primary">
+              <span class="icon">🔍</span>
+              Inspect User
+            </button>
+            <button id="decipherBtn" class="btn-secondary">
+              <span class="icon">🧩</span>
+              Show Teams
+            </button>
+          </div>
+
+          <!-- User Info Card (populated after inspect) -->
+          <div id="userInfoCard" class="info-card hidden"></div>
+        </div>
       </div>
 
-      <div class="row">
-        <button id="listPassesBtn">List Passes</button>
-        <button id="revokeExpiredBtn">Revoke Expired Now</button>
+      <!-- Step 3: Grant/Revoke Access -->
+      <div class="card">
+        <div class="card-header">
+          <h2>✨ Step 3: Manage Access</h2>
+        </div>
+        <div class="card-body">
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="teamSelect">Select Team</label>
+              <select id="teamSelect">
+                <option value="">-- Select a team --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="roleSelect">Role (if user has none)</label>
+              <select id="roleSelect">
+                <option value="">-- Auto-detect or choose --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="duration">Duration</label>
+              <select id="duration">
+                <option value="permanent">Permanent</option>
+                <option value="24">24 hours</option>
+                <option value="72">72 hours</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="action-section">
+            <div class="button-group">
+              <button id="grantSecondaryBtn" class="btn-success" disabled>
+                <span class="icon">➕</span>
+                Grant as SECONDARY
+              </button>
+              <button id="grantPrimaryBtn" class="btn-primary-action hidden" disabled>
+                <span class="icon">⭐</span>
+                Grant as PRIMARY
+              </button>
+              <button id="revokeBtn" class="btn-danger" disabled>
+                <span class="icon">🗑️</span>
+                Revoke Access
+              </button>
+            </div>
+            <p class="help-text" id="actionHelp">Select a team and inspect a user to enable actions.</p>
+          </div>
+        </div>
       </div>
 
-      <pre id="output"></pre>
+      <!-- Advanced Actions -->
+      <div class="card collapsible">
+        <div class="card-header clickable" onclick="toggleCard(this)">
+          <h2>🔧 Advanced Actions</h2>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body collapsed">
+          <div class="button-group">
+            <button id="listPassesBtn" class="btn-secondary">
+              <span class="icon">📋</span>
+              List All Passes
+            </button>
+            <button id="revokeExpiredBtn" class="btn-secondary">
+              <span class="icon">🧹</span>
+              Revoke Expired
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output Section -->
+      <div class="card">
+        <div class="card-header clickable" onclick="toggleCard(this)">
+          <h2>💬 Response Output</h2>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div id="outputFormatted" class="formatted-output"></div>
+          <details>
+            <summary class="debug-toggle">Show raw JSON</summary>
+            <pre id="outputRaw" class="raw-output"></pre>
+          </details>
+        </div>
+      </div>
+
     </div>
   </div>
 
