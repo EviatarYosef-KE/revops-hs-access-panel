@@ -21,6 +21,7 @@ const els = {
   decipherBtn: document.getElementById("decipherBtn"),
   grantSecondaryBtn: document.getElementById("grantSecondaryBtn"),
   grantPrimaryBtn: document.getElementById("grantPrimaryBtn"),
+  assignRoleBtn: document.getElementById("assignRoleBtn"),
   revokeBtn: document.getElementById("revokeBtn"),
 
   listPassesBtn: document.getElementById("listPassesBtn"),
@@ -173,6 +174,7 @@ function updateActionHelp(message) {
 
 function updateButtonStates() {
   const hasTeam = els.teamSelect && els.teamSelect.value;
+  const hasRole = els.roleSelect && els.roleSelect.value;
   const hasUser = currentUser != null;
 
   // Grant Primary button - show only if user has no primary team
@@ -192,6 +194,11 @@ function updateButtonStates() {
     } else {
       els.grantSecondaryBtn.disabled = true;
     }
+  }
+
+  // Assign Role Only button - enable if user exists and role selected
+  if (els.assignRoleBtn) {
+    els.assignRoleBtn.disabled = !hasUser || !hasRole;
   }
 
   // Revoke button
@@ -406,11 +413,31 @@ async function grantSecondary() {
   if (roleId) payload.defaultRoleId = roleId;
   
   const res = await apiCall("grantAccess", payload);
-  setOutput(res);
+  
+  // Show verification results
+  if (res.ok && res.result && res.result.verification) {
+    const v = res.result.verification;
+    let verifyHtml = '<div class="alert alert-success"><strong>✅ Access granted</strong></div>';
+    
+    verifyHtml += '<div class="verification-box">';
+    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment may have failed)'}</p>`;
+    verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
+    verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
+    verifyHtml += '</div>';
+    
+    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+      verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Warning:</strong> Role was not assigned by HubSpot. You may need to assign the role manually in HubSpot UI, or the role ID might be invalid.</div>';
+    }
+    
+    setOutput(res, verifyHtml);
+  } else {
+    setOutput(res);
+  }
 
   if (res.ok) {
     // Refresh user info
-    setTimeout(() => inspectUser(), 500);
+    setTimeout(() => inspectUser(), 1000);
   }
 }
 
@@ -428,11 +455,67 @@ async function grantPrimary() {
   if (roleId) payload.defaultRoleId = roleId;
   
   const res = await apiCall("grantAccess", payload);
-  setOutput(res);
+  
+  // Show verification results
+  if (res.ok && res.result && res.result.verification) {
+    const v = res.result.verification;
+    let verifyHtml = '<div class="alert alert-success"><strong>✅ Primary access granted</strong></div>';
+    
+    verifyHtml += '<div class="verification-box">';
+    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment may have failed)'}</p>`;
+    verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
+    verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
+    verifyHtml += '</div>';
+    
+    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+      verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Warning:</strong> Role was not assigned by HubSpot. You may need to assign the role manually in HubSpot UI, or try using the "Assign Role Only" button.</div>';
+    }
+    
+    setOutput(res, verifyHtml);
+  } else {
+    setOutput(res);
+  }
 
   if (res.ok) {
     // Refresh user info
-    setTimeout(() => inspectUser(), 500);
+    setTimeout(() => inspectUser(), 1000);
+  }
+}
+
+async function assignRoleOnly() {
+  const email = (els.userEmail?.value || "").trim();
+  const roleId = (els.roleSelect?.value || "").trim();
+
+  if (!email) return alert("Enter a user email.");
+  if (!roleId) return alert("Select a role.");
+
+  setOutput("Assigning role...");
+  
+  const res = await apiCall("assignRole", { email, roleId });
+  
+  // Show verification results
+  if (res.ok && res.result && res.result.verification) {
+    const v = res.result.verification;
+    let verifyHtml = '<div class="alert alert-success"><strong>✅ Role assignment attempted</strong></div>';
+    
+    verifyHtml += '<div class="verification-box">';
+    verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+    verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '⚠️ None (assignment failed)'}</p>`;
+    verifyHtml += '</div>';
+    
+    if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+      verifyHtml += '<div class="alert alert-error"><strong>❌ Error:</strong> HubSpot did not assign the role. This might mean:<br>1. The role ID is invalid<br>2. The role requires Super Admin permissions<br>3. Your API token lacks necessary scopes<br>4. HubSpot API limitations</div>';
+    }
+    
+    setOutput(res, verifyHtml);
+  } else {
+    setOutput(res);
+  }
+
+  if (res.ok) {
+    // Refresh user info
+    setTimeout(() => inspectUser(), 1000);
   }
 }
 
@@ -543,6 +626,10 @@ els.grantPrimaryBtn?.addEventListener("click", () =>
   grantPrimary().catch(e => setOutput({ ok: false, error: String(e?.message || e) }))
 );
 
+els.assignRoleBtn?.addEventListener("click", () =>
+  assignRoleOnly().catch(e => setOutput({ ok: false, error: String(e?.message || e) }))
+);
+
 els.revokeBtn?.addEventListener("click", () =>
   revokeAccess().catch(e => setOutput({ ok: false, error: String(e?.message || e) }))
 );
@@ -567,8 +654,12 @@ els.revokeExpiredBtn?.addEventListener?.("click", async () => {
   }
 });
 
-// Update button states when team is selected
+// Update button states when team or role is selected
 els.teamSelect?.addEventListener("change", () => {
+  updateButtonStates();
+});
+
+els.roleSelect?.addEventListener("change", () => {
   updateButtonStates();
 });
 
