@@ -594,9 +594,38 @@ async function revokeAccess() {
   try {
     const res = await apiCall("revokeAccess", { email, teamId });
     
-    if (res.ok) {
-      setOutput(res, '<div class="alert alert-success"><strong>✅ Access revoked successfully</strong></div>');
-      // Only refresh on success
+    if (res.ok && res.result) {
+      const result = res.result;
+      
+      // Check if it was actually ok
+      if (result.ok === false) {
+        setOutput(res, `<div class="alert alert-warning"><strong>⚠️ ${escapeHtml(result.note || 'Revoke not performed')}</strong></div>`);
+        return;
+      }
+      
+      let verifyHtml = '<div class="alert alert-success"><strong>✅ Access revoked successfully</strong></div>';
+      
+      // Show verification
+      if (result.verification) {
+        const v = result.verification;
+        verifyHtml += '<div class="verification-box">';
+        verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+        verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ Preserved (' + v.actualRoleIds.join(', ') + ')' : '⚠️ None'}</p>`;
+        verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId ? '✅ ' + v.actualPrimaryTeamId : 'None'}</p>`;
+        verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None (all removed)'}</p>`;
+        verifyHtml += '</div>';
+        
+        // Check if roles were accidentally removed
+        if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+          verifyHtml += '<div class="alert alert-error"><strong>❌ WARNING: Roles were removed!</strong><br>';
+          verifyHtml += 'The revoke operation accidentally cleared the user\'s roles. This is a HubSpot API issue.<br>';
+          verifyHtml += 'You may need to re-assign the role manually.</div>';
+        }
+      }
+      
+      setOutput(res, verifyHtml);
+      
+      // Refresh to show updated state
       setTimeout(() => inspectUser(), 1000);
     } else {
       // Show error without refreshing - this prevents jumping to inspection
