@@ -455,7 +455,8 @@ async function grantPrimary() {
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
 
-  setOutput("Granting PRIMARY access...");
+  const attemptingRole = roleId ? true : false;
+  setOutput(attemptingRole ? "Granting PRIMARY access + attempting role assignment..." : "Granting PRIMARY access...");
   
   try {
     const payload = { email, teamId, mode: "primary" };
@@ -466,26 +467,36 @@ async function grantPrimary() {
     // Show verification results
     if (res.ok && res.result && res.result.verification) {
       const v = res.result.verification;
+      const roleAttempt = res.result.roleAssignmentAttempt;
+      
       let verifyHtml = '<div class="alert alert-success"><strong>✅ Primary team access granted</strong></div>';
       
       verifyHtml += '<div class="verification-box">';
-      verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? v.actualRoleIds.join(', ') : '⚠️ None (role assignment failed)'}</p>`;
-      verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId || 'None'}</p>`;
+      verifyHtml += '<h4>Final Result (what HubSpot actually stored):</h4>';
+      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '⚠️ None'}</p>`;
+      verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId ? '✅ ' + v.actualPrimaryTeamId : 'None'}</p>`;
       verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None'}</p>`;
       verifyHtml += '</div>';
       
-      if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-        verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Failed</strong><br>';
-        verifyHtml += 'Team assignment worked, but HubSpot rejected the role assignment.<br>';
-        verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+      // Show role assignment attempt results
+      if (attemptingRole && roleAttempt) {
+        if (roleAttempt.success) {
+          verifyHtml += '<div class="alert alert-success"><strong>🎉 Role assignment SUCCESS!</strong><br>';
+          verifyHtml += `Method that worked: <strong>${escapeHtml(roleAttempt.method)}</strong></div>`;
+        } else if (roleAttempt.error) {
+          verifyHtml += '<div class="alert alert-error"><strong>❌ Role assignment failed</strong><br>' + escapeHtml(roleAttempt.error) + '</div>';
+        } else if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
+          verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Did Not Work</strong><br>';
+          verifyHtml += 'Tried multiple methods (PATCH, PUT variations) but none succeeded.<br><br>';
+          verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+        }
       }
       
       setOutput(res, verifyHtml);
       
       // Only refresh if operation was successful
       if (res.ok) {
-        setTimeout(() => inspectUser(), 1000);
+        setTimeout(() => inspectUser(), 1500);
       }
     } else {
       setOutput(res);
@@ -502,41 +513,63 @@ async function assignRoleOnly() {
   if (!email) return alert("Enter a user email.");
   if (!roleId) return alert("Select a role.");
 
-  setOutput("Attempting to assign role...");
+  setOutput("Attempting to assign role using multiple methods...");
   
   try {
     const res = await apiCall("assignRole", { email, roleId });
     
     // Show verification results
-    if (res.ok && res.result && res.result.verification) {
-      const v = res.result.verification;
+    if (res.ok && res.result) {
+      const result = res.result;
       let verifyHtml = '';
       
-      if (v.actualRoleIds && v.actualRoleIds.length > 0) {
-        verifyHtml = '<div class="alert alert-success"><strong>✅ Role assigned successfully!</strong></div>';
+      if (result.success) {
+        verifyHtml = '<div class="alert alert-success"><strong>✅ SUCCESS! Role assigned!</strong><br>';
+        verifyHtml += `Method that worked: <strong>${escapeHtml(result.method)}</strong></div>`;
       } else {
-        verifyHtml = '<div class="alert alert-error"><strong>❌ Role assignment FAILED</strong></div>';
+        verifyHtml = '<div class="alert alert-error"><strong>❌ All role assignment methods failed</strong></div>';
       }
       
-      verifyHtml += '<div class="verification-box">';
-      verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-      verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '❌ None'}</p>`;
-      verifyHtml += '</div>';
+      // Show verification
+      if (result.verification) {
+        const v = result.verification;
+        verifyHtml += '<div class="verification-box">';
+        verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
+        verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ ' + v.actualRoleIds.join(', ') : '❌ None'}</p>`;
+        verifyHtml += '</div>';
+      }
       
-      if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-        verifyHtml += '<div class="alert alert-error"><strong>❌ HubSpot Rejected Role Assignment</strong><br><br>';
-        verifyHtml += '<strong>Possible reasons:</strong><br>';
-        verifyHtml += '• API token lacks <code>settings.users.roles.write</code> scope<br>';
-        verifyHtml += '• Role requires Super Admin permissions<br>';
-        verifyHtml += '• HubSpot API doesn\'t support role assignment via this endpoint<br>';
-        verifyHtml += '• Role ID is invalid<br><br>';
-        verifyHtml += '<strong>Solution:</strong> Assign roles manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+      // Show attempts
+      if (result.attempts && result.attempts.length > 0) {
+        verifyHtml += '<details style="margin-top: 16px;"><summary style="cursor: pointer; font-weight: 600;">Show attempted methods (' + result.attempts.length + ')</summary>';
+        verifyHtml += '<div style="margin-top: 12px; font-family: monospace; font-size: 12px;">';
+        for (const attempt of result.attempts) {
+          verifyHtml += `<div style="padding: 8px; background: rgba(255,255,255,0.02); margin: 4px 0; border-radius: 4px;">`;
+          verifyHtml += `<strong>${escapeHtml(attempt.approach)}:</strong> `;
+          verifyHtml += attempt.error ? `<span style="color: #ef4444;">${escapeHtml(attempt.error)}</span>` : '<span style="color: #10b981;">Request sent</span>';
+          verifyHtml += `</div>`;
+        }
+        verifyHtml += '</div></details>';
+      }
+      
+      if (!result.success) {
+        verifyHtml += '<div class="alert alert-warning" style="margin-top: 16px;"><strong>What we tried:</strong><br>';
+        verifyHtml += '• PATCH method<br>';
+        verifyHtml += '• PUT with role only<br>';
+        verifyHtml += '• PUT with superAdmin flag<br>';
+        verifyHtml += '• PUT with roleId (singular)<br><br>';
+        verifyHtml += '<strong>None of these methods worked.</strong><br><br>';
+        verifyHtml += 'This confirms HubSpot API does not support role assignment via the <code>/settings/v3/users</code> endpoint.<br><br>';
+        verifyHtml += '<strong>Next steps:</strong><br>';
+        verifyHtml += '1. Check your API token has ALL user-related scopes<br>';
+        verifyHtml += '2. Contact HubSpot support about role assignment API<br>';
+        verifyHtml += '3. For now: Assign roles manually in HubSpot UI</div>';
       }
       
       setOutput(res, verifyHtml);
       
       // Only refresh on success
-      if (res.ok && v.actualRoleIds && v.actualRoleIds.length > 0) {
+      if (result.success && result.verification && result.verification.actualRoleIds && result.verification.actualRoleIds.length > 0) {
         setTimeout(() => inspectUser(), 1000);
       }
     } else {
