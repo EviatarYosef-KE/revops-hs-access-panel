@@ -9,9 +9,11 @@ const els = {
 
   userEmail: document.getElementById("userEmail"),
   teamSelect: document.getElementById("teamSelect"),
+  roleIdInput: document.getElementById("roleIdInput"),
   duration: document.getElementById("duration"),
 
   refreshTeamsBtn: document.getElementById("refreshTeamsBtn"),
+  listRolesBtn: document.getElementById("listRolesBtn"),
   grantBtn: document.getElementById("grantBtn"),
   revokeBtn: document.getElementById("revokeBtn"),
 
@@ -92,15 +94,37 @@ async function refreshTeams() {
   setOutput({ ok: true, message: "Teams loaded", count: teams.length });
 }
 
+async function listRoles() {
+  setOutput("Loading roles...");
+  const data = await apiCall("listRoles");
+
+  if (!data.ok) throw new Error(data.error || "Failed to load roles.");
+
+  const roles = Array.isArray(data.result) ? data.result : [];
+  
+  setOutput({
+    ok: true,
+    message: "Roles loaded",
+    count: roles.length,
+    roles: roles,
+    hint: "Copy a role ID and paste it in the 'Default Role ID' field if user has no roles"
+  });
+}
+
 async function grantSecondary() {
   const email = (els.userEmail?.value || "").trim();
   const teamId = els.teamSelect?.value;
+  const roleId = (els.roleIdInput?.value || "").trim();
 
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
 
   setOutput("Granting (secondary)...");
-  const res = await apiCall("grantAccess", { email, teamId });
+  
+  const payload = { email, teamId };
+  if (roleId) payload.defaultRoleId = roleId;
+  
+  const res = await apiCall("grantAccess", payload);
   setOutput(res);
 }
 
@@ -142,7 +166,7 @@ async function inspectUser() {
   const email = (els.userEmail?.value || "").trim();
   if (!email) return alert("Enter a user email first.");
 
-  setOutput("Inspecting user (raw fields)...");
+  setOutput("Inspecting user (detailed comparison)...");
   const res = await apiCall("inspectUser", { email });
   setOutput(res);
 }
@@ -150,12 +174,17 @@ async function inspectUser() {
 async function grantPrimary() {
   const email = (els.userEmail?.value || "").trim();
   const teamId = els.teamSelect?.value;
+  const roleId = (els.roleIdInput?.value || "").trim();
 
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
 
   setOutput("Granting as PRIMARY...");
-  const res = await apiCall("grantAccess", { email, teamId, mode: "primary" });
+  
+  const payload = { email, teamId, mode: "primary" };
+  if (roleId) payload.defaultRoleId = roleId;
+  
+  const res = await apiCall("grantAccess", payload);
   setOutput(res);
 }
 
@@ -266,6 +295,10 @@ els.unlockBtn?.addEventListener("click", async () => {
 
 els.refreshTeamsBtn?.addEventListener("click", () =>
   refreshTeams().catch(e => setOutput({ ok: false, error: String(e?.message || e) }))
+);
+
+els.listRolesBtn?.addEventListener("click", () =>
+  listRoles().catch(e => setOutput({ ok: false, error: String(e?.message || e) }))
 );
 
 els.grantBtn?.addEventListener("click", () =>
