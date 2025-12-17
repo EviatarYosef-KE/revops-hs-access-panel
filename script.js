@@ -95,7 +95,7 @@ function showUserInfo(inspectData) {
     roleNames = names.join(", ");
   }
 
-  // Find team names
+  // Find team names - ALWAYS try to look up
   let primaryTeamName = "None";
   if (hasPrimary) {
     const team = loadedTeams.find(t => String(t.id) === String(merged.primaryTeamId));
@@ -140,6 +140,7 @@ function showUserInfo(inspectData) {
         </span>
       </div>
     </div>
+    ${loadedTeams.length === 0 ? '<p class="help-text" style="margin-top: 12px; color: #f59e0b;">⚠️ Team names not loaded. Click "Load Teams" to see team names instead of IDs.</p>' : ''}
   `;
   
   els.userInfoCard.classList.remove("hidden");
@@ -407,6 +408,16 @@ async function grantSecondary() {
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
 
+  // Make sure teams are loaded for name display
+  if (loadedTeams.length === 0) {
+    setOutput("Loading teams first...");
+    try {
+      await refreshTeams();
+    } catch (e) {
+      // Continue anyway
+    }
+  }
+
   setOutput("Granting secondary access...");
   
   try {
@@ -430,14 +441,14 @@ async function grantSecondary() {
       if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
         verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Failed</strong><br>';
         verifyHtml += 'Team assignment worked, but HubSpot rejected the role assignment.<br>';
-        verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+        verifyHtml += '<strong>Workaround:</strong> Use "Assign Role Only" button to assign the role separately.</div>';
       }
       
       setOutput(res, verifyHtml);
       
       // Only refresh if operation was successful
       if (res.ok) {
-        setTimeout(() => inspectUser(), 1000);
+        setTimeout(() => inspectUser(), 1500);
       }
     } else {
       setOutput(res);
@@ -454,6 +465,16 @@ async function grantPrimary() {
 
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
+
+  // Make sure teams are loaded for name display
+  if (loadedTeams.length === 0) {
+    setOutput("Loading teams first...");
+    try {
+      await refreshTeams();
+    } catch (e) {
+      // Continue anyway
+    }
+  }
 
   const attemptingRole = roleId ? true : false;
   setOutput(attemptingRole ? "Granting PRIMARY access + attempting role assignment..." : "Granting PRIMARY access...");
@@ -487,8 +508,8 @@ async function grantPrimary() {
           verifyHtml += '<div class="alert alert-error"><strong>❌ Role assignment failed</strong><br>' + escapeHtml(roleAttempt.error) + '</div>';
         } else if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
           verifyHtml += '<div class="alert alert-warning"><strong>⚠️ Role Assignment Did Not Work</strong><br>';
-          verifyHtml += 'Tried multiple methods (PATCH, PUT variations) but none succeeded.<br><br>';
-          verifyHtml += '<strong>Workaround:</strong> Assign the role manually in HubSpot UI → Settings → Users & Teams → Edit user permissions.</div>';
+          verifyHtml += 'Tried multiple methods but none succeeded.<br>';
+          verifyHtml += '<strong>Solution:</strong> Use "Assign Role Only" button to try assigning the role separately.</div>';
         }
       }
       
@@ -587,9 +608,19 @@ async function revokeAccess() {
   if (!email) return alert("Enter a user email.");
   if (!teamId) return alert("Select a team.");
 
+  // Make sure teams are loaded so we can show names
+  if (loadedTeams.length === 0) {
+    setOutput("Loading teams first...");
+    try {
+      await refreshTeams();
+    } catch (e) {
+      // Continue anyway
+    }
+  }
+
   if (!confirm(`Revoke access for ${email} from the selected team?`)) return;
 
-  setOutput("Revoking access...");
+  setOutput("Attempting to revoke access using multiple methods...");
   
   try {
     const res = await apiCall("revokeAccess", { email, teamId });
@@ -603,32 +634,101 @@ async function revokeAccess() {
         return;
       }
       
-      let verifyHtml = '<div class="alert alert-success"><strong>✅ Access revoked successfully</strong></div>';
+      let verifyHtml = '';
       
-      // Show verification
-      if (result.verification) {
-        const v = result.verification;
+      if (result.ok && result.method) {
+        verifyHtml = `<div class="alert alert-success"><strong>✅ Access revoked successfully!</strong><br>Method that worked: <strong>${escapeHtml(result.method)}</strong></div>`;
+      } else {
+        verifyHtml = '<div class="alert alert-error"><strong>❌ All revoke methods failed</strong></div>';
+      }
+      
+      // Show before/after comparison
+      if (result.beforeState && result.verification) {
+        const before = result.beforeState;
+        const after = result.verification;
+        
         verifyHtml += '<div class="verification-box">';
-        verifyHtml += '<h4>Verification (what HubSpot actually stored):</h4>';
-        verifyHtml += `<p><strong>Roles:</strong> ${v.actualRoleIds && v.actualRoleIds.length > 0 ? '✅ Preserved (' + v.actualRoleIds.join(', ') + ')' : '⚠️ None'}</p>`;
-        verifyHtml += `<p><strong>Primary Team:</strong> ${v.actualPrimaryTeamId ? '✅ ' + v.actualPrimaryTeamId : 'None'}</p>`;
-        verifyHtml += `<p><strong>Secondary Teams:</strong> ${v.actualSecondaryTeamIds && v.actualSecondaryTeamIds.length > 0 ? v.actualSecondaryTeamIds.join(', ') : 'None (all removed)'}</p>`;
+        verifyHtml += '<h4>Before → After:</h4>';
+        verifyHtml += `<p><strong>Roles:</strong> `;
+        if (before.roleIds && before.roleIds.length > 0) {
+          verifyHtml += `${before.roleIds.join(', ')} → `;
+        } else {
+          verifyHtml += 'None → ';
+        }
+        if (after.actualRoleIds && after.actualRoleIds.length > 0) {
+          verifyHtml += `✅ ${after.actualRoleIds.join(', ')} (preserved)`;
+        } else {
+          verifyHtml += '❌ None (LOST!)';
+        }
+        verifyHtml += '</p>';
+        
+        verifyHtml += `<p><strong>Secondary Teams:</strong> `;
+        if (before.secondaryTeamIds && before.secondaryTeamIds.length > 0) {
+          verifyHtml += `${before.secondaryTeamIds.join(', ')} → `;
+        } else {
+          verifyHtml += 'None → ';
+        }
+        if (after.actualSecondaryTeamIds && after.actualSecondaryTeamIds.length > 0) {
+          verifyHtml += `${after.actualSecondaryTeamIds.join(', ')}`;
+        } else {
+          verifyHtml += 'None (removed)';
+        }
+        verifyHtml += '</p>';
         verifyHtml += '</div>';
         
-        // Check if roles were accidentally removed
-        if (!v.actualRoleIds || v.actualRoleIds.length === 0) {
-          verifyHtml += '<div class="alert alert-error"><strong>❌ WARNING: Roles were removed!</strong><br>';
-          verifyHtml += 'The revoke operation accidentally cleared the user\'s roles. This is a HubSpot API issue.<br>';
-          verifyHtml += 'You may need to re-assign the role manually.</div>';
+        // Check if roles were lost
+        const hadRoles = before.roleIds && before.roleIds.length > 0;
+        const hasRoles = after.actualRoleIds && after.actualRoleIds.length > 0;
+        
+        if (hadRoles && !hasRoles) {
+          verifyHtml += '<div class="alert alert-error"><strong>❌ CRITICAL: Roles were removed!</strong><br>';
+          verifyHtml += 'This is a HubSpot API bug. The team removal somehow cleared the roles.<br>';
+          verifyHtml += '<strong>Action needed:</strong> Re-assign the role using "Assign Role Only" button.</div>';
         }
+        
+        // Check if team was actually removed
+        const hadTeam = before.secondaryTeamIds && before.secondaryTeamIds.includes(teamId);
+        const hasTeam = after.actualSecondaryTeamIds && after.actualSecondaryTeamIds.includes(teamId);
+        
+        if (hadTeam && hasTeam) {
+          verifyHtml += '<div class="alert alert-error"><strong>❌ Team was NOT removed!</strong><br>';
+          verifyHtml += 'The API call was sent but HubSpot did not remove the team.<br>';
+          verifyHtml += 'You may need to remove it manually in HubSpot UI.</div>';
+        }
+      }
+      
+      // Show attempted methods
+      if (result.attempts && result.attempts.length > 0) {
+        verifyHtml += '<details style="margin-top: 16px;"><summary style="cursor: pointer; font-weight: 600;">Show attempted methods (' + result.attempts.length + ')</summary>';
+        verifyHtml += '<div style="margin-top: 12px; font-family: monospace; font-size: 12px;">';
+        for (const attempt of result.attempts) {
+          verifyHtml += `<div style="padding: 8px; background: rgba(255,255,255,0.02); margin: 4px 0; border-radius: 4px;">`;
+          verifyHtml += `<strong>${escapeHtml(attempt.method)}:</strong> `;
+          if (attempt.error) {
+            verifyHtml += `<span style="color: #ef4444;">${escapeHtml(attempt.error)}</span>`;
+          } else if (attempt.verification) {
+            const v = attempt.verification;
+            const teamRemoved = !v.actualSecondaryTeamIds || !v.actualSecondaryTeamIds.includes(teamId);
+            const rolesPreserved = v.actualRoleIds && v.actualRoleIds.length > 0;
+            if (teamRemoved && rolesPreserved) {
+              verifyHtml += '<span style="color: #10b981;">✅ Worked!</span>';
+            } else {
+              verifyHtml += `<span style="color: #f59e0b;">⚠️ Team removed: ${teamRemoved}, Roles preserved: ${rolesPreserved}</span>`;
+            }
+          } else {
+            verifyHtml += '<span style="color: #6b7280;">Sent</span>';
+          }
+          verifyHtml += `</div>`;
+        }
+        verifyHtml += '</div></details>';
       }
       
       setOutput(res, verifyHtml);
       
       // Refresh to show updated state
-      setTimeout(() => inspectUser(), 1000);
+      setTimeout(() => inspectUser(), 1500);
     } else {
-      // Show error without refreshing - this prevents jumping to inspection
+      // Show error without refreshing
       setOutput(res);
     }
   } catch (e) {
