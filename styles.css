@@ -400,6 +400,32 @@ button:disabled {
   min-height: 40px;
 }
 
+.verification-box {
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.verification-box h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--color-info);
+  font-weight: 600;
+}
+
+.verification-box p {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.verification-box strong {
+  color: var(--color-text-help);
+  font-weight: 600;
+}
+
 .raw-output {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
