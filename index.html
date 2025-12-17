@@ -43,6 +43,12 @@
         </div>
 
         <div>
+          <label>Default Role ID (optional)</label>
+          <input id="roleIdInput" type="text" placeholder="e.g., 12345" />
+          <p class="muted" style="margin-top: 4px; font-size: 11px;">Use "List Roles" to find IDs. Only needed if user has no roles.</p>
+        </div>
+
+        <div>
           <label>Duration</label>
           <select id="duration">
             <option value="permanent">Permanent</option>
@@ -54,6 +60,7 @@
 
       <div class="row">
         <button id="refreshTeamsBtn">Refresh Teams</button>
+        <button id="listRolesBtn" style="background: #1a4d8f; border-color: #1a4d8f;">List Roles</button>
         <button id="grantBtn" class="primary">Grant</button>
         <button id="revokeBtn" class="danger">Revoke</button>
       </div>
